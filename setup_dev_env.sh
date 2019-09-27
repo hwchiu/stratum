@@ -97,35 +97,23 @@ done
 THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 IMAGE_NAME=stratum-dev
 
-DOCKER_BUILD_OPTIONS="-t $IMAGE_NAME"
-if [ "$PULL_DOCKER" == YES ]; then
-    DOCKER_BUILD_OPTIONS="$DOCKER_BUILD_OPTIONS --pull"
-fi
-DOCKER_BUILD_OPTIONS="$DOCKER_BUILD_OPTIONS --build-arg USER_NAME=\"$USER\" --build-arg USER_ID=\"$UID\""
-if [ ! -z "$GIT_NAME" ]; then
-    DOCKER_BUILD_OPTIONS="$DOCKER_BUILD_OPTIONS --build-arg GIT_GLOBAL_NAME=\"$GIT_NAME\""
-fi
-if [ ! -z "$GIT_EMAIL" ]; then
-    DOCKER_BUILD_OPTIONS="$DOCKER_BUILD_OPTIONS --build-arg GIT_GLOBAL_EMAIL=\"$GIT_EMAIL\""
-fi
-if [ ! -z "$GIT_EDITOR" ]; then
-    DOCKER_BUILD_OPTIONS="$DOCKER_BUILD_OPTIONS --build-arg GIT_GLOBAL_EDITOR=\"$GIT_EDITOR\""
-fi
-eval docker build $DOCKER_BUILD_OPTIONS -f $THIS_DIR/Dockerfile.dev $THIS_DIR
+DOCKER_BUILD_OPTIONS+=( "-t" "$IMAGE_NAME" "--build-arg" "USER_NAME=\"$USER\"" "--build-arg" "USER_ID=\"$UID\"" )
+
+[ "$PULL_DOCKER" == YES ] && DOCKER_BUILD_OPTIONS+=( "--pull" )
+[ -n "$GIT_NAME" ] && DOCKER_BUILD_OPTIONS+=( "--build-arg" "GIT_GLOBAL_NAME=\"$GIT_NAME\"" )
+[ -n "$GIT_EMAIL" ] && DOCKER_BUILD_OPTIONS+=( "--build-arg" "GIT_GLOBAL_EMAIL=\"$GIT_EMAIL\"" )
+[ -n "$GIT_EDITOR" ] && DOCKER_BUILD_OPTIONS+=( "--build-arg" "GIT_GLOBAL_EDITOR=\"$GIT_EDITOR\"" )
+
+eval docker build "${DOCKER_BUILD_OPTIONS[@]}" -f "$THIS_DIR/Dockerfile.dev" "$THIS_DIR"
 ERR=$?
 if [ $ERR -ne 0 ]; then
     >&2 echo "ERROR: Error while building dockering development image"
     exit $ERR
 fi
 
-DOCKER_RUN_OPTIONS="--rm -v $THIS_DIR:/stratum"
-if [ "$MOUNT_SSH" == YES ]; then
-    DOCKER_RUN_OPTIONS="$DOCKER_RUN_OPTIONS -v $HOME/.ssh:/home/$USER/.ssh"
-fi
-if [ -n "$SDKLT" ]; then
-    DOCKER_RUN_OPTIONS="$DOCKER_RUN_OPTIONS -v $SDKLT:/home/$USER/SDKLT"
-    DOCKER_RUN_OPTIONS="$DOCKER_RUN_OPTIONS -e SDKLT_INSTALL=$SDKLT_INSTALL"
-fi
-DOCKER_RUN_OPTIONS="$DOCKER_RUN_OPTIONS -v $BAZEL_CACHE:/home/$USER/.cache"
-DOCKER_RUN_OPTIONS="$DOCKER_RUN_OPTIONS $@"
-docker run $DOCKER_RUN_OPTIONS -w /stratum --user $USER -ti $IMAGE_NAME bash
+DOCKER_RUN_OPTIONS=( "--rm" "-v" "$THIS_DIR:/stratum" "-v" "$BAZEL_CACHE:/home/$USER/.cache" )
+
+[ "$MOUNT_SSH" == YES ] &&  DOCKER_RUN_OPTIONS+=( "$HOME/.ssh:/home/$USER/.ssh" )
+[ -n "$SDKLT" ] && DOCKER_RUN_OPTIONS+=( "-v" "$SDKLT:/home/$USER/SDKLT" ) &&  DOCKER_RUN_OPTIONS+=( "-e" "SDKLT_INSTALL=$SDKLT_INSTALL")
+
+docker run "${DOCKER_RUN_OPTIONS[@]}" -w /stratum --user "$USER" -ti "$IMAGE_NAME" bash
